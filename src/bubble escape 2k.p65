@@ -1,18 +1,20 @@
 ;---------------------------------------------------------------------;
 ;                                                                     ;
+;                         Cat's Eye Technologies'                     ;
 ;                           Bubble Escape 2009                        ;
 ;                                                                     ;
 ;---------------------------------------------------------------------;
-;   Copyight (c)2009 Cat's Eye Technologies.  All rights reserved.    ;
+;   Copyright (c)2009 Cat's Eye Technologies.  All rights reserved.   ;
 ;---------------------------------------------------------------------;
 
-; TODO:
-; switch to uppercase set, disable switching case with cmd key
-;   (print chr$(8)?)-- look up programmers reference guide
 
-;--------
-; Symbolic constants for some hardware registers:
-;--------
+;===================================================================
+; ... Symbolic Constants...
+;===================================================================
+
+;------------------------------------------------;
+; Symbolic constants for some hardware registers ;
+;------------------------------------------------;
 
 .alias cia1                     $dc00
 .alias intr_ctrl                cia1+$d
@@ -31,7 +33,7 @@
 .alias vic_sprite_enable        vic_base+$15
 
 .alias vic_sprite_expand_y      vic_base+$17
-
+.alias vic_vmcsb                vic_base+$18
 .alias vic_intr                 vic_base+$19
 .alias vic_intr_enable          vic_base+$1a
 
@@ -64,6 +66,7 @@
 
 .alias joy2                     $dc00
 
+.alias mode                     $0291
 .alias cinv                     $0314   ; hw irq interrupt, 60x per second
 
 .alias colormap                 $d800  ; - dbff
@@ -104,9 +107,9 @@
 .alias sid_3_osc_out            sid_base+$1B
 .alias sid_3_env_out            sid_base+$1C
 
-;--------
-; Symbolic constants for game
-;--------
+;-----------------------------;
+; Symbolic constants for game ;
+;-----------------------------;
 
 .alias game_border_color          0
 .alias game_bg_color              0
@@ -128,37 +131,41 @@
 .alias east_wall_char           66
 .alias east_wall_color          13
 
-;--------
-; Symbolic constants for copying sprites
-;--------
+;----------------------------------------;
+; Symbolic constants for copying sprites ;
+;----------------------------------------;
 
 .alias srcptr                   $fb
 .alias destptr                  $fd
 .alias sprite_len               $0200
 
-;--------
-; Symbolic constants for debugging
-;--------
+;----------------------------------;
+; Symbolic constants for debugging ;
+;----------------------------------;
 
 ;
 ; Set these to colors other than game_border_color if you want a
 ; visual indication of how long the raster interrupt takes to execute.
 ;
 
-.alias display_critical_border_color    color_red
-.alias irq_progress_border_color        color_yellow
+;.alias display_critical_border_color    color_red
+.alias display_critical_border_color    game_border_color
+;.alias irq_progress_border_color        color_yellow
+.alias irq_progress_border_color        game_border_color
 
-;--------
-; Header
-;--------
+
+;===================================================================
+; ... Header ...
+;===================================================================
 
 .org 0             ; no real address, we're just faking up a header
 .word $0801        ; we start here.
 .org $0801         ; 2049
 
-;--------
-; BASIC program
-;--------
+
+;===================================================================
+; ... BASIC loader stub ...
+;===================================================================
 
 .byte $10, $08                          ; base address
 .byte $c9, $07                          ; line number: 1993
@@ -167,6 +174,7 @@
 .byte $00, $00, $00                     ; end of program
 
 ; here is 2061 ($080d)
+
 
 ;===================================================================
 ; ... Global Initialization ...
@@ -177,6 +185,13 @@
 ;
 
 init:
+        lda #$80
+        sta mode   ; disable SHIFT+C= changing charset
+        lda vic_vmcsb
+        and #%11111000
+        ora #$05
+        sta vic_vmcsb  ; set character map base to uppercase set
+
         lda #game_bg_color
         sta vic_bg_0_color
         lda #game_border_color
@@ -257,6 +272,7 @@ patch_cinv:
         lda #$01
         sta vic_intr_enable ; enable raster interrupt on the VIC-II chip.
 
+
 ;===================================================================
 ; ... Title Screen ...
 ;===================================================================
@@ -268,6 +284,7 @@ title_screen:
         lda #>title_text
         sta srcptr+1
         jsr show_message_screen
+
 
 ;===================================================================
 ; ... Game State Initialization ...
@@ -429,6 +446,7 @@ initialize_room:
         sta waiting_collision_clear
         sta irq_active
 
+
 ;===================================================================
 ; ... Game Play Loop ...
 ;===================================================================
@@ -462,6 +480,7 @@ test_death:
         bne game_won
         
         jmp play_game
+
 
 ;===================================================================
 ; ... Outside Game Play Sequences ...
@@ -539,6 +558,7 @@ game_won:
         jsr show_message_screen
 
         jmp title_screen
+
 
 ;===================================================================
 ; ... Gameplay Subroutines ...
@@ -741,17 +761,6 @@ is_it_walls:
         sta vic_sprite_0_color+2
         sta vic_sprite_0_color+3
 
-; Visible viewing height: y=400 (50.0) to y=2000 (250.0) = 1600 positions
-; 1/3 of 1600 = 533 (+ 400 = 933, - 168/2 = 849)
-; 2/3 of 1600 = 1067 (+ 400 = 1467, - 168/2 = 1385)
-; Center of viewing height: y=1200   (250+50/2=150.0)
-; Center, for sprite: y=1200-(168/2)= 1116
-
-.alias wall_1_x_pos        736
-.alias wall_1_y_pos        849
-.alias wall_2_x_pos       2016
-.alias wall_2_y_pos       1385
-
         ldy #2
 
         lda #>wall_1_x_pos
@@ -824,10 +833,24 @@ is_it_dragon:
         sta vic_sprite_expand_x
         sta vic_sprite_expand_y
 
+        ldy #2
+        lda #>center_x_dwsprite
+        sta actor_0_xpos_high, y
+        lda #<center_x_dwsprite
+        sta actor_0_xpos_low, y
+
+        lda #>center_y_dwsprite
+        sta actor_0_ypos_high, y
+        lda #<center_y_dwsprite
+        sta actor_0_ypos_low, y
+
+        jmp enable_single_beast_tail
+
 setup_single_beast_tail:
         ldy #2
         jsr center_actor_number_y
 
+enable_single_beast_tail:
         lda vic_sprite_enable
         ora #%00000100
         sta vic_sprite_enable
@@ -847,13 +870,6 @@ is_it_three:
         sta vic_sprite_0_color+2
         sta vic_sprite_0_color+3
         sta vic_sprite_0_color+4
-
-.alias fireball_1_x_pos        736
-.alias fireball_1_y_pos        849
-.alias fireball_2_x_pos       1376           
-.alias fireball_2_y_pos       1116           
-.alias fireball_3_x_pos       2016
-.alias fireball_3_y_pos       1385
 
         ldy #2
 
@@ -1032,10 +1048,6 @@ check_kind_of_hit:
         tya
         and #$02
         bne hit_room_item
-
-        ;lda #5
-        ;inc vic_bg_0_color
-
         jmp enter_popped_state
 
 hit_room_item:
@@ -1349,6 +1361,7 @@ clean_exeunt:
 
         rti
 
+
 ;===================================================================
 ; ... Logic Routines ...
 ;===================================================================
@@ -1501,71 +1514,9 @@ sentry_done:
         jmp logic_routine_return_address
 
 
-; **********
-; * Sentry *
-; **********
-;
-; Straight-line towards player
-;
-xsentry_logic_routine:
-        lda #$00
-        sta actor_0_xvel, y
-        sta actor_0_yvel, y
-
-        lda actor_0_xpos_high
-        cmp actor_0_xpos_high, y
-        beq test_low_bytes_horizontal
-        bcc sentry_left
-        jmp sentry_right
-
-xtest_low_bytes_horizontal:
-        lda actor_0_xpos_low
-        cmp actor_0_xpos_low, y
-        beq sentry_vertical
-        bcc sentry_left
-        ;bcs sentry_right
-
-xsentry_right:
-        lda #$04
-        jmp sentry_vertical
-        sta actor_0_xvel, y
-
-xsentry_left:
-        lda #$fc
-
-xsentry_vertical:
-        sta actor_0_xvel, y
-
-        lda actor_0_ypos_high
-        cmp actor_0_ypos_high, y
-        beq test_low_bytes_vertical
-        bcc sentry_up
-        jmp sentry_down
-
-xtest_low_bytes_vertical:
-        lda actor_0_ypos_low
-        cmp actor_0_ypos_low, y
-        bcc sentry_up
-        ;bcs sentry_down
-
-xsentry_down:
-        lda #$04
-        jmp sentry_done
-
-xsentry_up:
-        lda #$fc
-
-xsentry_done:
-        sta actor_0_yvel, y
-
-        jmp logic_routine_return_address
-
-
-
 ;===================================================================
 ; ... General Subroutines ...
 ;===================================================================
-
 
 clear_screen:
         ldy #0
@@ -1630,6 +1581,7 @@ shift_temp:
         ror
         sta temp_low
         rts
+
 
 ;============================================================
 ; ... Actor routines ...
@@ -1733,6 +1685,7 @@ set_sprite_y:
 done_moving_sprites:
         rts
 
+
 ;===================================================================
 ; ... Game-state Routines ...
 ;===================================================================
@@ -1759,13 +1712,15 @@ end_of_message:
         jsr wait_joystick_button
         rts
 
-;****************
-; CONSTANT DATA
-;****************
+
+;*****************;
+;  CONSTANT DATA  ;
+;*****************;
 
 title_text:             .byte 2, 21, 2, 2, 12, 5, 32, 5, 19, 3, 1, 16, 5, 0  ; "BUBBLE ESCAPE"
 game_over_text:         .byte 7, 1, 13, 5, 32, 15, 22, 5, 18, 0              ; "GAME OVER"
 game_won_text:          .byte 25, 15, 21, 32, 5, 19, 3, 1, 16, 5, 4, 0       ; "YOU ESCAPED"
+
 
 ;====================================================================
 ;***** ***** ***** ***** ***** MAP DATA ***** ***** ***** ***** *****
@@ -2032,6 +1987,7 @@ sprite_source:
 
 .byte 0
 
+
 ;====================================================================
 ;**** ***** ***** ***** ***** VARIABLES ***** ***** ***** ***** *****
 ;====================================================================
@@ -2133,6 +2089,29 @@ sprite_source:
 
 .alias initial_x_bubble 2016      ; for re-appearing in rooms that
 .alias initial_y_bubble  849      ; already contain baddies in center
+
+; double width sprites center x = 1472-192=1280, y = 1200-168=1031
+
+.alias center_x_dwsprite  1280
+.alias center_y_dwsprite  1031
+
+; Visible viewing height: y=400 (50.0) to y=2000 (250.0) = 1600 positions
+; 1/3 of 1600 = 533 (+ 400 = 933, - 168/2 = 849)
+; 2/3 of 1600 = 1067 (+ 400 = 1467, - 168/2 = 1385)
+; Center of viewing height: y=1200   (250+50/2=150.0)
+; Center, for sprite: y=1200-(168/2)= 1116
+
+.alias wall_1_x_pos        736
+.alias wall_1_y_pos        849
+.alias wall_2_x_pos       2016
+.alias wall_2_y_pos       1385
+
+.alias fireball_1_x_pos        736
+.alias fireball_1_y_pos        849
+.alias fireball_2_x_pos       1376           
+.alias fireball_2_y_pos       1116           
+.alias fireball_3_x_pos       2016
+.alias fireball_3_y_pos       1385
 
 ;
 ; Actor has moved to adjacent room to north when its y position
