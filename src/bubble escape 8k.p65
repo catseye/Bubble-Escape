@@ -278,19 +278,6 @@ new_game:
         sta room_num
         sta num_keys
 
-;XXXXXXXXXXXXXXXXXX
-;        lda #198
-;        sta room_num
-;        tay
-;        lda #5
-;        sta num_keys
-;        lda map, y
-;        and #%11110000
-;        ora #c_start
-;        sta map, y
-;        lda #0
-;XXXXXXXXXXXXXXXXXX
-
         tay
 reset_actors_loop:
         sta actor_table_base, y
@@ -822,7 +809,6 @@ check_waiting_collision_clear:
         ora vic_bg_collision
         bne not_handled_by_us
 
-        ;lda #0
         sta waiting_collision_clear
         jmp start_display_critical_region
 
@@ -1036,8 +1022,7 @@ update_xvel:
         cmp #max_vel
         bcc xvel_within_limit ; branch if accumulator is less
         cmp #min_vel
-        bcc update_xpos ; bcs xvel_within_limit ; branch if accumulator is greater or equal
-        ;jmp update_xpos
+        bcc update_xpos ; branch if accumulator is greater or equal
 
 xvel_within_limit:
         sta actor_0_xvel, y
@@ -1067,8 +1052,7 @@ update_yvel:
         cmp #max_vel
         bcc yvel_within_limit ; branch if accumulator is less
         cmp #min_vel
-        bcc update_ypos  ; bcs yvel_within_limit ; branch if accumulator is greater or equal
-        ;jmp update_ypos
+        bcc update_ypos  ; branch if accumulator is greater or equal
 
 yvel_within_limit:
         sta actor_0_yvel, y
@@ -1192,11 +1176,6 @@ change_room:
         sta room_changed
         
         jmp disable_irq_exeunt
-
-        ;lda #0
-        ;sta irq_active
-        ;jmp no_more_boundaries
-
 
 exeunt:
         lda player_died
@@ -1324,7 +1303,6 @@ test_low_bytes_horizontal:
         cmp actor_0_xpos_low, y
         beq sentry_vertical
         bcc sentry_left
-        ;bcs sentry_right
 
 sentry_right:
         lda #$01
@@ -1346,7 +1324,6 @@ test_low_bytes_vertical:
         lda actor_0_ypos_low
         cmp actor_0_ypos_low, y
         bcc sentry_up
-        ;bcs sentry_down
 
 sentry_down:
         lda #$01
