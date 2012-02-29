@@ -1,0 +1,2185 @@
+;---------------------------------------------------------------------;
+;                                                                     ;
+;                           Bubble Escape 2009                        ;
+;                                                                     ;
+;---------------------------------------------------------------------;
+;   Copyight (c)2009 Cat's Eye Technologies.  All rights reserved.    ;
+;---------------------------------------------------------------------;
+
+; TODO:
+; switch to uppercase set, disable switching case with cmd key
+;   (print chr$(8)?)-- look up programmers reference guide
+
+;--------
+; Symbolic constants for some hardware registers:
+;--------
+
+.alias cia1                     $dc00
+.alias intr_ctrl                cia1+$d
+.alias timer_a                  cia1+$e
+.alias timer_b                  cia1+$f
+
+.alias screen                   $0400
+.alias sprite_0_ptr             $07f8  ; etc
+
+.alias vic_base                 $d000
+.alias vic_sprite_0_x           vic_base+$0
+.alias vic_sprite_0_y           vic_base+$1  ; etc
+.alias vic_sprite_x_msb         vic_base+$10
+.alias vic_ctrl                 vic_base+$11
+.alias vic_raster_cmp           vic_base+$12
+.alias vic_sprite_enable        vic_base+$15
+
+.alias vic_sprite_expand_y      vic_base+$17
+
+.alias vic_intr                 vic_base+$19
+.alias vic_intr_enable          vic_base+$1a
+
+.alias vic_sprite_expand_x      vic_base+$1d
+
+.alias vic_sprite_collision     vic_base+$1e
+.alias vic_bg_collision         vic_base+$1f
+
+.alias vic_border_color         vic_base+$20
+.alias vic_bg_0_color           vic_base+$21
+
+.alias vic_sprite_0_color       vic_base+$27
+
+.alias color_black              $00
+.alias color_white              $01
+.alias color_red                $02
+.alias color_cyan               $03
+.alias color_purple             $04
+.alias color_green              $05
+.alias color_blue               $06
+.alias color_yellow             $07
+.alias color_orange             $08
+.alias color_brown              $09
+.alias color_lt_red             $0A
+.alias color_gray_1             $0B
+.alias color_gray_2             $0C
+.alias color_lt_green           $0D
+.alias color_lt_blue            $0E
+.alias color_gray_3             $0F
+
+.alias joy2                     $dc00
+
+.alias cinv                     $0314   ; hw irq interrupt, 60x per second
+
+.alias colormap                 $d800  ; - dbff
+
+.alias sid_base                 $d400
+
+.alias sid_1_low_freq           sid_base+$00
+.alias sid_1_high_freq          sid_base+$01
+.alias sid_1_low_pw             sid_base+$02
+.alias sid_1_high_pw            sid_base+$03
+.alias sid_1_control            sid_base+$04
+.alias sid_1_env_ad             sid_base+$05
+.alias sid_1_env_sr             sid_base+$06
+
+.alias sid_2_low_freq           sid_base+$07
+.alias sid_2_high_freq          sid_base+$08
+.alias sid_2_low_pw             sid_base+$09
+.alias sid_2_high_pw            sid_base+$0A
+.alias sid_2_control            sid_base+$0B
+.alias sid_2_env_ad             sid_base+$0C
+.alias sid_2_env_sr             sid_base+$0D
+
+.alias sid_3_low_freq           sid_base+$0E
+.alias sid_3_high_freq          sid_base+$0F
+.alias sid_3_low_pw             sid_base+$10
+.alias sid_3_high_pw            sid_base+$11
+.alias sid_3_control            sid_base+$12
+.alias sid_3_env_ad             sid_base+$13
+.alias sid_3_env_sr             sid_base+$14
+
+.alias sid_low_cutoff           sid_base+$15
+.alias sid_high_cutoff          sid_base+$16
+.alias sid_resonance            sid_base+$17
+.alias sid_volume               sid_base+$18
+.alias sid_ad_paddle_1          sid_base+$19
+.alias sid_ad_paddle_2          sid_base+$1A
+
+.alias sid_3_osc_out            sid_base+$1B
+.alias sid_3_env_out            sid_base+$1C
+
+;--------
+; Symbolic constants for game
+;--------
+
+.alias game_border_color          0
+.alias game_bg_color              0
+
+.alias max_vel                  $10
+.alias min_vel                  $f0
+
+.alias scanline                 251
+
+.alias corner_char              102
+.alias corner_color               6
+
+.alias north_wall_char          67
+.alias north_wall_color         13
+.alias south_wall_char          67
+.alias south_wall_color         13
+.alias west_wall_char           66
+.alias west_wall_color          13
+.alias east_wall_char           66
+.alias east_wall_color          13
+
+;--------
+; Symbolic constants for copying sprites
+;--------
+
+.alias srcptr                   $fb
+.alias destptr                  $fd
+.alias sprite_len               $0200
+
+;--------
+; Symbolic constants for debugging
+;--------
+
+;
+; Set these to colors other than game_border_color if you want a
+; visual indication of how long the raster interrupt takes to execute.
+;
+
+.alias display_critical_border_color    color_red
+.alias irq_progress_border_color        color_yellow
+
+;--------
+; Header
+;--------
+
+.org 0             ; no real address, we're just faking up a header
+.word $0801        ; we start here.
+.org $0801         ; 2049
+
+;--------
+; BASIC program
+;--------
+
+.byte $10, $08                          ; base address
+.byte $c9, $07                          ; line number: 1993
+.byte $9e                               ; SYS
+.byte $32, $30, $36, $31                ; '2061'
+.byte $00, $00, $00                     ; end of program
+
+; here is 2061 ($080d)
+
+;===================================================================
+; ... Global Initialization ...
+;===================================================================
+
+;
+; Stuff that only needs to be set up once, at the very beginning.
+;
+
+init:
+        lda #game_bg_color
+        sta vic_bg_0_color
+        lda #game_border_color
+        sta vic_border_color
+
+        lda #$8f   ; volume = 15, bit 7 = voice 3 silenced
+        sta sid_volume
+
+        lda #$80   ; noise
+        sta sid_3_control
+        
+        lda #100
+        sta sid_3_low_freq
+        sta sid_3_high_freq
+        
+        lda #3
+        sta vic_sprite_0_color
+
+copy_sprites:
+
+        lda #<sprite_source
+        sta srcptr
+        lda #>sprite_source
+        sta srcptr+1
+
+        lda #<sprite_dest
+        sta destptr
+        lda #>sprite_dest
+        sta destptr+1
+
+        ldx #>sprite_len
+
+outer_loop:
+        ldy #0
+
+inner_loop:
+        lda (srcptr), y
+        sta (destptr), y
+        iny
+        bne inner_loop
+
+        inc srcptr+1    ; bump up high bytes
+        inc destptr+1
+        dex
+        bne outer_loop
+
+;
+; Set up the IRQ handler routine.
+;
+
+        lda #$00
+        sta irq_active
+        sta waiting_collision_clear
+
+patch_cinv:
+        sei        ; disable interrupts
+        lda cinv   ; save low byte
+        sta savecinv
+        lda cinv+1 ; save high byte
+        sta savecinv+1
+
+        lda #<newcinv
+        sta cinv
+        lda #>newcinv
+        sta cinv+1
+
+        lda #scanline   ; specify raster line at which irq will fire
+        sta vic_raster_cmp
+
+        lda vic_ctrl
+        and #%01111111
+        sta vic_ctrl
+
+        lda intr_ctrl ; clear interrupt register
+
+        cli        ; re-enable interrupts
+
+        lda #$01
+        sta vic_intr_enable ; enable raster interrupt on the VIC-II chip.
+
+;===================================================================
+; ... Title Screen ...
+;===================================================================
+
+title_screen:
+
+        lda #<title_text
+        sta srcptr
+        lda #>title_text
+        sta srcptr+1
+        jsr show_message_screen
+
+;===================================================================
+; ... Game State Initialization ...
+;===================================================================
+
+;
+; Stuff that needs to be set up at the beginning of every game.
+;
+
+new_game:
+
+        lda #$00
+        sta player_died
+        sta player_won
+
+;
+; For debugging, uncomment some of these lines
+;
+
+.alias start_room 0
+;.alias start_room 18       ; near NE teleporter
+;.alias start_room 198       ; near exit
+.alias initial_keys 0
+;.alias initial_keys 5
+
+        lda #initial_keys
+        sta num_keys
+        ldy #start_room
+        sty room_num
+        lda map, y
+        ora #c_start
+        sta map, y
+
+        ldy #0
+        lda #0
+reset_actors_loop:
+        sta actor_table_base, y
+        iny
+        cpy #actor_table_size
+        bne reset_actors_loop
+
+        ;
+        ; Make actor 0 the bubble.
+        ; Position bubble in center of room.
+        ;
+
+        ldy #0
+        jsr center_actor_number_y
+
+        lda #<bubble_logic_routine
+        sta actor_0_logic_low
+        lda #>bubble_logic_routine
+        sta actor_0_logic_high
+
+        lda #$09
+        sta num_lives
+
+set_up_map:
+        ldy #200
+set_up_map_loop:
+        dey
+
+        lda map, y
+
+        and #$0f
+        cmp #c_start
+        beq next_map_loop
+        cmp #c_telep
+        beq next_map_loop
+        cmp #c_exit
+        beq next_map_loop
+
+        jsr gen_random_4
+        clc
+        adc #c_walls
+        sta baddie
+
+        lda map, y
+        and #wall_mask
+        ora baddie
+        sta map, y
+
+next_map_loop:
+        cpy #0
+        bne set_up_map_loop
+
+place_keys_in_five_random_rooms:
+        ldx #6
+place_keys_loop:
+        jsr gen_random_room
+        tay
+        lda map, y
+
+        and #$0f
+        cmp #c_start
+        beq place_keys_loop
+        cmp #c_telep
+        beq place_keys_loop
+        cmp #c_exit
+        beq place_keys_loop
+        cmp #c_key
+        beq place_keys_loop
+
+        lda map, y
+        and #wall_mask
+        ora #c_key
+        sta map, y
+
+        dex
+        bne place_keys_loop
+
+;-----------------------------;
+; Initialize the current room ;
+;-----------------------------;
+
+;
+; Draw the room on the screen and set up baddies.
+; Set the bubble sprite to the bubble image.
+; (Re)activate the raster IRQ.
+;
+; This can happen
+; - when the game begins,
+; - when the bubble moves to an adjacent room,
+; - after the bubble dies and starts the next life.
+;
+
+initialize_room:
+
+        ; clear the room-changed flag and blank all sprites
+
+        lda #$00
+        sta room_changed
+        sta player_died
+        sta player_state
+        sta vic_sprite_enable
+        sta vic_sprite_expand_x
+        sta vic_sprite_expand_y
+
+        ; cache current map cell in current_room
+
+        ldy room_num
+        lda map, y
+        sta current_room
+
+        jsr clear_screen
+        jsr draw_room_contents
+
+        lda #bubble_page      ; to reset to bubble after it was possibly showing "pop" sprite
+        sta sprite_0_ptr
+
+        lda #$01
+        sta vic_sprite_enable
+
+        jsr clear_monsters
+        jsr set_up_monsters
+        jsr update_sprites
+
+        lda #$01
+        sta waiting_collision_clear
+        sta irq_active
+
+;===================================================================
+; ... Game Play Loop ...
+;===================================================================
+
+;
+; When the bubble enters another room, we draw the new room.  Because
+; this may take a relatively long time, we do this here, outside of
+; the IRQ handler.
+;
+; Invariant: if the IRQ sets the room_changed or player_died flags, it
+; also sets irq_active to zero, so that we don't have to do that.
+; (If it was our responsibility, it would open up a race condition,
+; albeit one quite unlikely to actually happen.)  We are responsible
+; for re-activating the IRQ, if we so desire.  (We do so desire in
+; the case of moving to a new room, but not in the case of the game
+; being over.)
+;
+play_game:
+        lda room_changed
+        beq test_death
+;
+; Player moved to a new room, so draw it and restart game loop.
+;
+        jmp initialize_room
+
+test_death:
+        lda player_died
+        bne death_sequence
+
+        lda player_won
+        bne game_won
+        
+        jmp play_game
+
+;===================================================================
+; ... Outside Game Play Sequences ...
+;===================================================================
+
+;---------------;
+; Bubble Popped ;
+;---------------;
+
+death_sequence:
+        lda #0
+        sta player_died
+
+        lda #state_alive
+        sta player_state
+
+        ldy num_lives
+        dey
+        bne reset_bubble
+
+        jmp game_over
+
+reset_bubble:
+        sty num_lives
+
+        ldy #0              ; affect actor #0, the bubble
+
+;
+; If the room is walls or empty, place bubble in very center.
+; Else place bubble offset a bit.
+;
+
+        lda current_room
+        and #$0f
+        beq very_center    ; equivalent of cmp #c_blank
+        cmp #c_walls
+        beq very_center
+        cmp #c_start
+        beq very_center
+
+        jsr offset_actor_number_y
+        
+        jmp be_still_my_bubble
+
+very_center:
+        jsr center_actor_number_y
+
+be_still_my_bubble:
+        jsr be_still_actor_number_y
+
+        jmp initialize_room
+
+;-----------;
+; Game Over ;
+;-----------;
+
+game_over:
+        lda #<game_over_text
+        sta srcptr
+        lda #>game_over_text
+        sta srcptr+1
+        jsr show_message_screen
+
+        jmp title_screen
+
+;----------;
+; Game Won ;
+;----------;
+
+game_won:
+        lda #<game_won_text
+        sta srcptr
+        lda #>game_won_text
+        sta srcptr+1
+        jsr show_message_screen
+
+        jmp title_screen
+
+;===================================================================
+; ... Gameplay Subroutines ...
+;===================================================================
+
+;---------------------------------------------;
+; Draw the Contents of the Room on the Screen ;
+;---------------------------------------------;
+
+draw_room_contents:
+        lda current_room
+        and #wall_n
+        beq not_north
+        jsr draw_north
+not_north:
+        lda current_room
+        and #wall_w
+        beq not_west
+        jsr draw_west
+not_west:
+        lda current_room
+        and #wall_e
+        beq not_east
+        jsr draw_east
+not_east:
+        lda current_room
+        and #wall_s
+        beq not_south
+        jsr draw_south
+
+not_south:
+
+;
+; This sub-subroutine is sometimes called seperately,
+; to update the lives/keys score display.
+;
+draw_corners:
+        lda num_lives
+        clc
+        adc #176   ; 48 (code for 0) + 128 (reversed)
+        sta screen
+        lda num_keys
+        clc
+        adc #176
+        sta screen+39
+        lda #corner_char
+        sta screen+960
+        sta screen+999
+        lda #corner_color
+        sta colormap
+        sta colormap+39
+        sta colormap+960
+        sta colormap+999
+        rts
+
+
+draw_north:
+        ldy #40
+draw_north_loop:
+        lda #north_wall_char
+        sta screen-1, y
+        lda #north_wall_color
+        sta colormap-1, y
+        dey
+        bne draw_north_loop
+        rts
+
+draw_south:
+        ldy #40
+draw_south_loop:
+        lda #south_wall_char
+        sta screen+959, y
+        lda #south_wall_color
+        sta colormap+959, y
+        dey
+        bne draw_south_loop
+        rts
+
+draw_west:
+        ldy #240
+draw_west_loop:
+        lda #west_wall_char
+        sta screen, y
+        sta screen+240, y
+        sta screen+320, y
+        sta screen+560, y
+        sta screen+800, y
+        lda #west_wall_color
+        sta colormap, y
+        sta colormap+240, y
+        sta colormap+320, y
+        sta colormap+560, y
+        sta colormap+800, y
+        tya
+        sec
+        sbc #40
+        tay
+        bne draw_west_loop
+
+        rts
+
+draw_east:
+        ldy #240
+draw_east_loop:
+        lda #east_wall_char
+        sta screen+39, y
+        sta screen+279, y
+        sta screen+359, y
+        sta screen+599, y
+        sta screen+839, y
+        lda #east_wall_color
+        sta colormap+39, y
+        sta colormap+279, y
+        sta colormap+359, y
+        sta colormap+599, y
+        sta colormap+839, y
+
+        tya
+        sec
+        sbc #40
+        tay
+        bne draw_east_loop
+        rts
+
+clear_monsters:
+        ldy #1
+        lda #0
+clear_monsters_loop:
+        sta actor_0_xpos_low, y
+        sta actor_0_xpos_high, y
+
+        sta actor_0_ypos_low, y
+        sta actor_0_ypos_high, y
+
+        sta actor_0_logic_low, y
+        sta actor_0_logic_high, y
+
+        jsr be_still_actor_number_y    ; sets accum to 0 -> no change
+
+        iny
+        cpy #7
+        bne clear_monsters_loop
+
+set_up_monsters:
+
+is_it_exit:
+        lda current_room
+        and #$0f
+        cmp #c_exit
+        bne is_it_teleporter
+
+        lda #teleporter_page
+        sta sprite_0_ptr+1
+
+        lda #color_red
+
+setup_single_item_tail:
+        sta vic_sprite_0_color+1
+
+        ldy #1
+        jsr center_actor_number_y
+
+        lda vic_sprite_enable
+        ora #%00000010
+        sta vic_sprite_enable
+
+        rts
+
+is_it_teleporter:
+        cmp #c_telep
+        bne is_it_key
+
+        lda #teleporter_page
+        sta sprite_0_ptr+1
+
+        lda #color_green
+        jmp setup_single_item_tail
+
+is_it_key:
+        cmp #c_key
+        bne is_it_walls
+
+        lda #key_page
+        sta sprite_0_ptr+1
+
+        jsr gen_random_5
+        clc
+        adc #3
+        jmp setup_single_item_tail
+
+is_it_walls:
+        cmp #c_walls
+        bne is_it_guard
+
+        lda #wall_page
+        sta sprite_0_ptr+2
+        sta sprite_0_ptr+3
+
+        lda #color_yellow
+        sta vic_sprite_0_color+2
+        sta vic_sprite_0_color+3
+
+; Visible viewing height: y=400 (50.0) to y=2000 (250.0) = 1600 positions
+; 1/3 of 1600 = 533 (+ 400 = 933, - 168/2 = 849)
+; 2/3 of 1600 = 1067 (+ 400 = 1467, - 168/2 = 1385)
+; Center of viewing height: y=1200   (250+50/2=150.0)
+; Center, for sprite: y=1200-(168/2)= 1116
+
+.alias wall_1_x_pos        736
+.alias wall_1_y_pos        849
+.alias wall_2_x_pos       2016
+.alias wall_2_y_pos       1385
+
+        ldy #2
+
+        lda #>wall_1_x_pos
+        sta actor_0_xpos_high, y
+        lda #<wall_1_x_pos
+        sta actor_0_xpos_low, y
+
+        lda #>wall_1_y_pos
+        sta actor_0_ypos_high, y
+        lda #<wall_1_y_pos
+        sta actor_0_ypos_low, y
+
+        lda #8
+        sta actor_0_xvel, y
+
+        iny
+
+        lda #>wall_2_x_pos
+        sta actor_0_xpos_high, y
+        lda #<wall_2_x_pos
+        sta actor_0_xpos_low, y
+
+        lda #>wall_2_y_pos
+        sta actor_0_ypos_high, y
+        lda #<wall_2_y_pos
+        sta actor_0_ypos_low, y
+
+        lda #248        ; -8
+        sta actor_0_xvel, y
+
+        lda vic_sprite_enable
+        ora #%00001100
+        sta vic_sprite_enable
+
+        rts
+
+is_it_guard:
+        cmp #c_guard
+        bne is_it_dragon
+
+        lda #guard_page
+        sta sprite_0_ptr+2
+
+        lda #color_purple
+        sta vic_sprite_0_color+2
+
+        ldy #2
+        lda #<sentry_logic_routine
+        sta actor_0_logic_low, y
+        lda #>sentry_logic_routine
+        sta actor_0_logic_high, y
+
+        lda #45
+        sta sentry_timer
+
+        jmp setup_single_beast_tail
+
+is_it_dragon:
+        cmp #c_dragon
+        bne is_it_three
+
+        lda #dragon_page
+        sta sprite_0_ptr+2
+
+        lda #color_green
+        sta vic_sprite_0_color+2
+
+        ; double height and double width of dragon
+        lda #%00000100
+        sta vic_sprite_expand_x
+        sta vic_sprite_expand_y
+
+setup_single_beast_tail:
+        ldy #2
+        jsr center_actor_number_y
+
+        lda vic_sprite_enable
+        ora #%00000100
+        sta vic_sprite_enable
+
+        rts
+
+is_it_three:
+        cmp #c_three
+        bne its_not_anything
+
+        lda #fireball_page
+        sta sprite_0_ptr+2
+        sta sprite_0_ptr+3
+        sta sprite_0_ptr+4
+
+        lda #color_red
+        sta vic_sprite_0_color+2
+        sta vic_sprite_0_color+3
+        sta vic_sprite_0_color+4
+
+.alias fireball_1_x_pos        736
+.alias fireball_1_y_pos        849
+.alias fireball_2_x_pos       1376           
+.alias fireball_2_y_pos       1116           
+.alias fireball_3_x_pos       2016
+.alias fireball_3_y_pos       1385
+
+        ldy #2
+
+        lda #>fireball_1_x_pos
+        sta actor_0_xpos_high, y
+        lda #<fireball_1_x_pos
+        sta actor_0_xpos_low, y
+
+        lda #>fireball_1_y_pos
+        sta actor_0_ypos_high, y
+        lda #<fireball_1_y_pos
+        sta actor_0_ypos_low, y
+
+        iny
+
+        lda #>fireball_2_x_pos
+        sta actor_0_xpos_high, y
+        lda #<fireball_2_x_pos
+        sta actor_0_xpos_low, y
+
+        lda #>fireball_2_y_pos
+        sta actor_0_ypos_high, y
+        lda #<fireball_2_y_pos
+        sta actor_0_ypos_low, y
+
+        iny
+
+        lda #>fireball_3_x_pos
+        sta actor_0_xpos_high, y
+        lda #<fireball_3_x_pos
+        sta actor_0_xpos_low, y
+
+        lda #>fireball_3_y_pos
+        sta actor_0_ypos_high, y
+        lda #<fireball_3_y_pos
+        sta actor_0_ypos_low, y
+
+        lda vic_sprite_enable
+        ora #%00011100
+        sta vic_sprite_enable
+
+its_not_anything:
+        rts
+
+
+;====================================================================
+;***** ***** ***** ***** ***** IRQ HANDLER ***** ***** ***** ***** **
+;====================================================================
+
+;
+; Entry point.  Check if this IRQ was caused by the VIC chip.
+; If not, call any previously-installed handler.
+;
+
+newcinv:
+        lda vic_intr            ; see if this IRQ was caused by the VIC chip
+        sta vic_intr
+        and #$01
+        cmp #$01
+        beq we_handle_it
+        jmp (savecinv)
+
+;
+; Check to see if our IRQ handler is told to run or not.
+;
+we_handle_it:
+        lda irq_active
+        bne check_waiting_collision_clear
+        jmp (savecinv)
+
+;
+; Check to see if the VIC's collision register is clear
+; or not, if requested.  If not clear, wait until the next
+; raster interrupt before doing anything.  XXX this logic
+; seems a little borked, since we don't move any sprites
+; between the two interrupts, so how's it going to change?
+;
+check_waiting_collision_clear:
+        lda waiting_collision_clear
+        beq start_display_critical_region
+
+        lda vic_sprite_collision
+        ora vic_bg_collision
+        bne not_clear_yet
+
+        lda #0
+        sta waiting_collision_clear
+        jmp start_display_critical_region
+
+not_clear_yet:
+        jmp (savecinv)
+
+;--------------------------------------------------------------------------;
+; @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ;
+; Begin display-critical region.  If the following executes while the      ;
+; raster scan line is drawing the video display, it will look choppy.      ;
+;--------------------------------------------------------------------------;
+
+start_display_critical_region:
+        lda #display_critical_border_color
+        sta vic_border_color
+
+        jsr update_sprites
+
+;--------------------------------------------------------------------------;
+; End of display-critical region.  It's OK if the following executes while ;
+; the raster scan line is drawing the video display.                       ;
+; @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ;
+;--------------------------------------------------------------------------;
+
+        lda #irq_progress_border_color
+        sta vic_border_color
+
+;--------------------------------------------------------;
+; Check for collisions that moving the sprites produced. ;
+; If the bubble has collided with a wall, pop it.        ;
+;--------------------------------------------------------;
+
+        lda player_state
+        cmp #state_popped
+        bne check_bg_collision
+
+        jmp done_with_collision_checks
+
+check_bg_collision:
+        lda vic_bg_collision
+        and #$01
+        beq no_wall_collision
+
+enter_popped_state:
+
+        lda #state_popped
+        sta player_state
+        lda #30
+        sta player_timer
+
+        lda #pop_page
+        sta sprite_0_ptr
+
+        ldy #0
+        jsr be_still_actor_number_y
+
+make_pop_sound:
+        lda #34
+        sta sid_1_high_freq
+        lda #7
+        sta sid_1_low_freq
+        
+        lda #1
+        sta sid_1_env_ad
+
+        lda #$d9
+        sta sid_1_env_sr
+
+        lda #129
+        sta sid_1_control
+        
+        lda #128
+        sta sid_1_control
+
+        jmp done_with_collision_checks
+
+no_wall_collision:
+
+;-----------------------------------------------------------;
+; If the bubble has collided with an enemy, pop it.         ;
+;-----------------------------------------------------------;
+
+        lda vic_sprite_collision
+        tay
+        and #$01
+        bne check_kind_of_hit
+        jmp done_with_collision_checks
+
+check_kind_of_hit:
+        tya
+        and #$02
+        bne hit_room_item
+
+        ;lda #5
+        ;inc vic_bg_0_color
+
+        jmp enter_popped_state
+
+hit_room_item:
+        lda vic_sprite_enable
+        and #%11111101
+        sta vic_sprite_enable
+
+        lda current_room
+        and #content_mask
+        
+        cmp #c_key
+        bne try_collide_teleporter
+
+collide_with_key:
+        inc num_keys
+        ldy room_num
+        lda current_room
+        and #wall_mask
+        sta map, y
+
+make_ding_sound:
+        lda #100
+        sta sid_1_high_freq
+        lda #0
+        sta sid_1_low_freq
+        
+        lda #6
+        sta sid_1_env_ad
+
+        lda #6
+        sta sid_1_env_sr
+
+        lda #17
+        sta sid_1_control
+
+        lda #16
+        sta sid_1_control
+
+        jsr draw_corners
+        jmp done_with_collision_checks
+
+try_collide_teleporter:
+        cmp #c_telep
+        bne try_collide_exit
+
+        lda room_num
+        cmp #180
+        bne try_ne
+
+        lda #19
+
+teleport_out:
+        sta room_num
+
+        lda #1
+        sta room_changed
+        lda #0
+        sta irq_active
+
+        ldy #0
+        jsr offset_actor_number_y
+        jsr be_still_actor_number_y
+
+        jmp clean_exeunt
+
+try_ne:
+        lda #180
+        jmp teleport_out
+
+try_collide_exit:
+        cmp #c_exit
+        bne done_with_collision_checks
+
+        lda vic_sprite_enable
+        ora #%00000010
+        sta vic_sprite_enable
+
+        lda num_keys
+        cmp #5
+        bne done_with_collision_checks
+
+        lda #0
+        sta irq_active
+        lda #1
+        sta player_won
+
+        jmp clean_exeunt
+
+done_with_collision_checks:
+
+;-------------------------------------------------------------------;
+; Compute new acceleration for each actor.  This is done using the  ;
+; actor's logic.  For the player, the logic checks the controls,    ;
+; i.e. the joystick.  For enemies, it uses AI, or whatever we have. ;
+;-------------------------------------------------------------------;
+
+        ldy #$00             ; actor number
+
+update_actor_loop:
+
+        lda actor_0_logic_high, y
+        beq skip_update_accel
+        sta indirect_jump_vector+1
+        lda actor_0_logic_low, y
+        sta indirect_jump_vector
+        tya
+        pha
+        jmp (indirect_jump_vector)
+
+logic_routine_return_address:
+        pla
+        tay
+
+skip_update_accel:
+
+;-------------------------------------------------------------------;
+; Then, update the actor's velocity based on its acceleration, and  ;
+; update its position based on its velocity.                        ;
+;-------------------------------------------------------------------;
+
+update_xvel:
+        clc
+        lda actor_0_xvel, y
+        adc actor_0_xacc, y
+        cmp #max_vel
+        bcc xvel_within_limit ; branch if accumulator is less
+        cmp #min_vel
+        bcs xvel_within_limit ; branch if accumulator is greater or equal
+        jmp update_xpos
+
+xvel_within_limit:
+        sta actor_0_xvel, y
+
+update_xpos:
+        clc
+        lda actor_0_xpos_low, y
+        adc actor_0_xvel, y
+        sta actor_0_xpos_low, y
+
+        lda #0
+        sta sign_extend
+        lda actor_0_xvel, y
+        and #$80
+        beq carry_x
+        dec sign_extend
+
+carry_x:
+        lda actor_0_xpos_high, y
+        adc sign_extend             ; $00, or $ff if xvel < 0
+        sta actor_0_xpos_high, y
+
+update_yvel:
+        clc
+        lda actor_0_yvel, y
+        adc actor_0_yacc, y
+        cmp #max_vel
+        bcc yvel_within_limit ; branch if accumulator is less
+        cmp #min_vel
+        bcs yvel_within_limit ; branch if accumulator is greater or equal
+        jmp update_ypos
+
+yvel_within_limit:
+        sta actor_0_yvel, y
+
+update_ypos:
+        clc
+        lda actor_0_ypos_low, y
+        adc actor_0_yvel, y
+        sta actor_0_ypos_low, y
+
+        lda #0
+        sta sign_extend
+        lda actor_0_yvel, y
+        and #$80
+        beq carry_y
+        dec sign_extend
+
+carry_y:
+        lda actor_0_ypos_high, y
+        adc sign_extend
+        sta actor_0_ypos_high, y
+
+;------------------------------------------------------------;
+; If the actor has exceeded the bounds of the room, wrap its ;
+; position to the other side of the room.  (If the actor is  ;
+; the bubble, also move to a new room in the map.)           ;
+;------------------------------------------------------------;
+
+check_west_boundary:
+        lda actor_0_xpos_high, y
+        cmp #1                          ;  = #>west_boundary+1
+        bcs check_east_boundary
+
+        lda actor_0_xpos_low, y
+        cmp #west_boundary+1            ;  = #<west_boundary+1
+        bcs check_east_boundary
+
+go_west:
+        lda #>east_boundary
+        sta actor_0_xpos_high, y
+        lda #<east_boundary
+        sec
+        sbc #1                          ; to make sure it is not over
+        sta actor_0_xpos_low, y
+
+        lda #$ff                        ; -1
+        jmp change_room
+
+check_east_boundary:
+        lda actor_0_xpos_high, y
+        cmp #>east_boundary
+        bcc check_north_boundary
+
+        lda actor_0_xpos_low, y
+        cmp #<east_boundary
+        bcc check_north_boundary
+
+go_east:
+        lda #>west_boundary
+        sta actor_0_xpos_high, y
+        lda #<west_boundary
+        clc
+        adc #1                          ; to make sure it is not over
+        sta actor_0_xpos_low, y
+
+        lda #$01                        ; +1
+        jmp change_room
+
+check_north_boundary:
+        lda actor_0_ypos_high, y
+        cmp #2                          ;  = #>north_boundary+1
+        bcs check_south_boundary
+
+        lda actor_0_ypos_low, y
+        cmp #<north_boundary            ; XXX should be #<north_boundary+1, but who's counting?
+        bcs check_south_boundary
+
+go_north:
+        lda #>south_boundary
+        sta actor_0_ypos_high, y
+        lda #<south_boundary
+        sec
+        sbc #1                          ; to make sure it is not over
+        sta actor_0_ypos_low, y
+
+        lda #0
+        sec
+        sbc #map_width
+        jmp change_room
+
+check_south_boundary:
+        lda actor_0_ypos_high, y
+        cmp #>south_boundary
+        bcc no_more_boundaries
+
+        lda actor_0_ypos_low, y
+        cmp #<south_boundary
+        bcc no_more_boundaries
+
+go_south:
+        lda #>north_boundary
+        sta actor_0_ypos_high, y
+        lda #<north_boundary
+        clc
+        adc #1                          ; to make sure it is not over
+        sta actor_0_ypos_low, y
+
+        lda #map_width
+        jmp change_room
+
+no_more_boundaries:
+        iny
+        cpy #8
+        beq exeunt
+        jmp update_actor_loop
+
+change_room:
+        cpy #0
+        bne no_more_boundaries            ; only change room if actor == bubble
+
+        sta room_delta
+
+        lda room_num
+        clc
+        adc room_delta
+        sta room_num
+
+        lda #1
+        sta room_changed
+        lda #0
+        sta irq_active
+        jmp no_more_boundaries
+
+
+exeunt:
+        lda player_died
+        beq clean_exeunt
+
+        lda #0
+        sta irq_active
+
+clean_exeunt:
+        lda #game_border_color
+        sta vic_border_color
+
+        pla
+        tay
+        pla
+        tax
+        pla
+
+        rti
+
+;===================================================================
+; ... Logic Routines ...
+;===================================================================
+
+;
+; An actor's logic routine is called to update the acceleration of
+; the actor. The routine is called with the number of the actor in
+; the y register.
+;
+; Every logic routine must meet these 2 invariants:
+;
+; 1. Must not be placed in zero page, as a high byte of 0 is used to
+; indicate 'no logic routine'.
+;
+; 2. Must execute jmp logic_routine_return_address at the end.
+;
+
+; **********
+; * Player *
+; **********
+;
+; Check the joystick and update 
+;
+bubble_logic_routine:
+        lda #$00
+        sta actor_0_yacc, y
+        sta actor_0_xacc, y
+
+        lda player_state
+        cmp #state_alive
+        beq alive_state_handling
+        ; else it's state_popped
+        jmp popped_state_handling
+
+alive_state_handling:
+        ldx joy2
+        txa
+        and #$01
+        bne not_up
+        lda #$ff
+        sta actor_0_yacc, y
+not_up:
+        txa
+        and #$02
+        bne not_down
+        lda #$01
+        sta actor_0_yacc, y
+not_down:
+        txa
+        and #$04
+        bne not_left
+        lda #$ff
+        sta actor_0_xacc, y
+not_left:
+        txa
+        and #$08
+        bne not_right
+        lda #$01
+        sta actor_0_xacc, y
+not_right:
+        txa
+        and #$10
+        bne not_fire
+        ; ...
+not_fire:
+        jmp logic_routine_return_address
+
+popped_state_handling:
+        lda player_timer
+        sec
+        sbc #1
+        sta player_timer
+        cmp #0
+        beq we_have_died
+
+        jmp logic_routine_return_address
+
+we_have_died:
+
+        lda #$01
+        sta player_died
+
+        jmp logic_routine_return_address
+
+
+; **********
+; * Sentry *
+; **********
+;
+; Accelerate towards player
+;
+sentry_logic_routine:
+        ldx sentry_timer
+        cpx #0
+        beq sentry_is_active
+        dex
+        stx sentry_timer
+        jmp logic_routine_return_address
+
+sentry_is_active:
+        lda #$00
+        sta actor_0_xacc, y
+        sta actor_0_yacc, y
+
+        lda actor_0_xpos_high
+        cmp actor_0_xpos_high, y
+        beq test_low_bytes_horizontal
+        bcc sentry_left
+        jmp sentry_right
+
+test_low_bytes_horizontal:
+        lda actor_0_xpos_low
+        cmp actor_0_xpos_low, y
+        beq sentry_vertical
+        bcc sentry_left
+        ;bcs sentry_right
+
+sentry_right:
+        lda #$01
+        jmp sentry_vertical
+
+sentry_left:
+        lda #$ff
+
+sentry_vertical:
+        sta actor_0_xacc, y
+
+        lda actor_0_ypos_high
+        cmp actor_0_ypos_high, y
+        beq test_low_bytes_vertical
+        bcc sentry_up
+        jmp sentry_down
+
+test_low_bytes_vertical:
+        lda actor_0_ypos_low
+        cmp actor_0_ypos_low, y
+        bcc sentry_up
+        ;bcs sentry_down
+
+sentry_down:
+        lda #$01
+        jmp sentry_done
+
+sentry_up:
+        lda #$ff
+
+sentry_done:
+        sta actor_0_yacc, y
+
+        jmp logic_routine_return_address
+
+
+; **********
+; * Sentry *
+; **********
+;
+; Straight-line towards player
+;
+xsentry_logic_routine:
+        lda #$00
+        sta actor_0_xvel, y
+        sta actor_0_yvel, y
+
+        lda actor_0_xpos_high
+        cmp actor_0_xpos_high, y
+        beq test_low_bytes_horizontal
+        bcc sentry_left
+        jmp sentry_right
+
+xtest_low_bytes_horizontal:
+        lda actor_0_xpos_low
+        cmp actor_0_xpos_low, y
+        beq sentry_vertical
+        bcc sentry_left
+        ;bcs sentry_right
+
+xsentry_right:
+        lda #$04
+        jmp sentry_vertical
+        sta actor_0_xvel, y
+
+xsentry_left:
+        lda #$fc
+
+xsentry_vertical:
+        sta actor_0_xvel, y
+
+        lda actor_0_ypos_high
+        cmp actor_0_ypos_high, y
+        beq test_low_bytes_vertical
+        bcc sentry_up
+        jmp sentry_down
+
+xtest_low_bytes_vertical:
+        lda actor_0_ypos_low
+        cmp actor_0_ypos_low, y
+        bcc sentry_up
+        ;bcs sentry_down
+
+xsentry_down:
+        lda #$04
+        jmp sentry_done
+
+xsentry_up:
+        lda #$fc
+
+xsentry_done:
+        sta actor_0_yvel, y
+
+        jmp logic_routine_return_address
+
+
+
+;===================================================================
+; ... General Subroutines ...
+;===================================================================
+
+
+clear_screen:
+        ldy #0
+
+clear_screen_loop:
+        lda #0
+        sta colormap, y
+        sta colormap+250, y
+        sta colormap+500, y
+        sta colormap+750, y
+
+        lda #32
+        sta screen, y
+        sta screen+250, y
+        sta screen+500, y
+        sta screen+750, y
+
+        iny
+        cpy #250
+        bne clear_screen_loop
+
+        rts
+
+wait_joystick_button:
+        lda joy2
+        and #$10
+        bne wait_joystick_button
+wait_joystick_release:
+        lda joy2
+        and #$10
+        beq wait_joystick_release
+        rts
+
+gen_random_room:
+        lda sid_3_osc_out
+        cmp #200
+        bcs gen_random_room
+        rts
+
+gen_random_5:
+        lda sid_3_osc_out
+        and #$07
+        cmp #5
+        bcs gen_random_5
+        rts
+
+gen_random_4:
+        lda sid_3_osc_out
+        and #$03
+        rts
+
+;
+; Divides the 16-bit word in (temp_high, temp_low) by 2.
+; Leaves the low byte in the accumulator upon return.
+;
+shift_temp:
+        clc
+        lda temp_high
+        ror
+        sta temp_high
+        lda temp_low
+        ror
+        sta temp_low
+        rts
+
+;============================================================
+; ... Actor routines ...
+;============================================================
+
+center_actor_number_y:
+        lda #>center_x_sprite
+        sta actor_0_xpos_high, y
+        lda #<center_x_sprite
+        sta actor_0_xpos_low, y
+
+        lda #>center_y_sprite
+        sta actor_0_ypos_high, y
+        lda #<center_y_sprite
+        sta actor_0_ypos_low, y
+
+        rts
+
+; not in the center, but offset a bit so as not to collide immediately with thing in center
+offset_actor_number_y:
+        lda #>initial_x_bubble
+        sta actor_0_xpos_high, y
+        lda #<initial_x_bubble
+        sta actor_0_xpos_low, y
+
+        lda #>initial_y_bubble
+        sta actor_0_ypos_high, y
+        lda #<initial_y_bubble
+        sta actor_0_ypos_low, y
+
+        rts
+
+be_still_actor_number_y:
+        lda #0
+        sta actor_0_xvel, y
+        sta actor_0_yvel, y
+
+        sta actor_0_xacc, y
+        sta actor_0_yacc, y
+
+        rts
+
+;------------------------------------------------------------------;
+; Update the position of each sprite, based on the position of its ;
+; associated actor.  This is called from the display-critical      ;
+; portion of the IRQ handler, so try not to dally...               ;
+;------------------------------------------------------------------;
+
+update_sprites:
+        ldy #$00             ; actor number
+        ldx #$00             ; = y * 2, for to poke into VIC
+
+        stx vic_sprite_x_msb   ; assume all low
+        lda #1
+        sta msb_counter
+
+update_sprite_loop:
+        ; XXX check if actor/sprite #y is active.
+        ; if not, we may skip all this.
+        ; However, it is not necessary until we start to stuff
+        ; so much into this IRQ handler that performance is threatened.
+
+set_sprite_x:
+        lda actor_0_xpos_low, y
+        sta temp_low
+        lda actor_0_xpos_high, y
+        sta temp_high
+
+        jsr shift_temp
+        jsr shift_temp
+        jsr shift_temp
+        sta vic_sprite_0_x, x
+
+        lda temp_high         ; calculate the sprite's msb
+        beq advance_msb_counter
+        lda vic_sprite_x_msb
+        ora msb_counter
+        sta vic_sprite_x_msb
+
+advance_msb_counter:
+        asl msb_counter
+
+set_sprite_y:
+        lda actor_0_ypos_low, y
+        sta temp_low
+        lda actor_0_ypos_high, y
+        sta temp_high
+
+        jsr shift_temp
+        jsr shift_temp
+        jsr shift_temp
+        sta vic_sprite_0_y, x
+
+        iny
+        inx
+        inx
+        cpy #8
+        beq done_moving_sprites
+        jmp update_sprite_loop
+
+done_moving_sprites:
+        rts
+
+;===================================================================
+; ... Game-state Routines ...
+;===================================================================
+
+show_message_screen:
+
+        lda #0
+        sta vic_sprite_enable
+
+        jsr clear_screen
+
+        ldy #0
+
+print_loop:                             ; print out message and wait for fire button
+        lda (srcptr), y
+        beq end_of_message
+        sta screen, y
+        lda #1
+        sta colormap, y
+        iny
+        jmp print_loop
+
+end_of_message:
+        jsr wait_joystick_button
+        rts
+
+;****************
+; CONSTANT DATA
+;****************
+
+title_text:             .byte 2, 21, 2, 2, 12, 5, 32, 5, 19, 3, 1, 16, 5, 0  ; "BUBBLE ESCAPE"
+game_over_text:         .byte 7, 1, 13, 5, 32, 15, 22, 5, 18, 0              ; "GAME OVER"
+game_won_text:          .byte 25, 15, 21, 32, 5, 19, 3, 1, 16, 5, 4, 0       ; "YOU ESCAPED"
+
+;====================================================================
+;***** ***** ***** ***** ***** MAP DATA ***** ***** ***** ***** *****
+;====================================================================
+
+.alias wall_n           %10000000
+.alias wall_w           %01000000
+.alias wall_e           %00100000
+.alias wall_s           %00010000
+
+.alias wall_mask        %11110000
+
+.alias c_blank          %00000000
+.alias c_start          %00000001
+.alias c_telep          %00000010
+.alias c_exit           %00000011
+
+.alias c_walls          %00000100
+.alias c_dragon         %00000101
+.alias c_guard          %00000110
+.alias c_three          %00000111
+
+.alias c_key            %00001000
+
+.alias content_mask     %00001111
+
+.alias map_width 20
+
+map:
+.byte %11000001, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10100000, %11010000, %10010000, %10010000, %10100000, %11010000, %10100000, %11010000, %10000000, %10100010
+.byte %01100000, %11010000, %10000000, %10000000, %10010000, %10100000, %11000000, %10010000, %10000000, %10110000, %01010000, %10100000, %11000000, %10010000, %00110000, %11000000, %00010000, %10000000, %00110000, %01110000
+.byte %01000000, %10010000, %00110000, %01100000, %11000000, %00110000, %01100000, %11100000, %01110000, %11000000, %10110000, %01100000, %01010000, %10000000, %10100000, %01100000, %11000000, %00100000, %11000000, %10100000
+.byte %01010000, %10010000, %10100000, %01100000, %01110000, %11100000, %01100000, %01100000, %11100000, %01100000, %11000000, %00110000, %11010000, %00110000, %01100000, %01100000, %01110000, %01010000, %00110000, %01100000
+.byte %11000000, %10000000, %00110000, %01000000, %10110000, %01000000, %00110000, %01010000, %00010000, %00100000, %01100000, %11000000, %10010000, %10010000, %00110000, %01010000, %10100000, %11000000, %10010000, %00110000
+.byte %01110000, %01110000, %11000000, %00000000, %10100000, %01100000, %11000000, %10010000, %10010000, %00110000, %01100000, %01100000, %11000000, %10010000, %10100000, %11100000, %01100000, %01100000, %11000000, %10100000
+.byte %11000000, %10000000, %00110000, %01100000, %01010000, %00000000, %00100000, %11010000, %10100000, %11000000, %00110000, %01100000, %01010000, %10100000, %01010000, %00010000, %00110000, %01010000, %00110000, %01100000
+.byte %01100000, %01110000, %11000000, %00010000, %10100000, %01100000, %01110000, %11000000, %00100000, %01100000, %11010000, %00000000, %10010000, %00100000, %11000000, %10010000, %10000000, %10010000, %10010000, %00100000
+.byte %01010000, %10000000, %00110000, %11000000, %00110000, %01010000, %10010000, %00110000, %01110000, %01010000, %10100000, %01100000, %11000000, %00110000, %01010000, %10100000, %01100000, %11000000, %10100000, %01110000
+.byte %11010010, %00010000, %10110000, %01010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %00010000, %00110000, %01010000, %10010000, %10010000, %00110000, %01010000, %00110000, %01010000, %10110011
+
+
+;=======================================================================
+;***** ***** ***** ***** ***** SPRITE DATA ***** ***** ***** ***** *****
+;=======================================================================
+
+sprite_source:
+
+.alias sprite_dest    $2000
+.alias sprite_0_page  $80 ; 192
+
+; Bubble
+.alias bubble_page    sprite_0_page
+
+.byte $00,$00,$00
+.byte $00,$ff,$00
+.byte $03,$00,$c0
+.byte $04,$60,$20
+.byte $08,$80,$10
+.byte $10,$00,$08
+.byte $10,$00,$08
+.byte $20,$00,$04
+.byte $20,$00,$04
+.byte $20,$00,$04
+.byte $20,$00,$04
+.byte $20,$00,$04
+.byte $20,$00,$04
+.byte $10,$00,$08
+.byte $10,$00,$08
+.byte $08,$00,$10
+.byte $04,$00,$20
+.byte $03,$00,$c0
+.byte $00,$ff,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+
+.byte 0
+
+; Dragon
+.alias dragon_page    sprite_0_page+1
+
+.byte $00,$38,$00
+.byte $14,$74,$1e
+.byte $2a,$44,$38
+.byte $7f,$fe,$3e
+.byte $2b,$ff,$78
+.byte $01,$ff,$7e
+.byte $54,$ff,$78
+.byte $3f,$ff,$7c
+.byte $07,$f8,$f8
+.byte $01,$f7,$f0
+.byte $07,$ea,$e0
+.byte $0f,$f0,$00
+.byte $1f,$ff,$00
+.byte $3f,$e1,$80
+.byte $3f,$de,$f0
+.byte $3f,$de,$f8
+.byte $1f,$ce,$fc
+.byte $06,$3c,$9e
+.byte $01,$f3,$06
+.byte $00,$ce,$18
+.byte $00,$00,$00
+
+.byte 0
+
+; Fireball
+.alias fireball_page    sprite_0_page+2
+
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$20,$00
+.byte $00,$12,$00
+.byte $00,$02,$00
+.byte $01,$80,$40
+.byte $00,$3c,$40
+.byte $02,$7e,$00
+.byte $04,$ff,$10
+.byte $00,$ff,$20
+.byte $02,$ff,$00
+.byte $04,$ff,$20
+.byte $00,$7e,$40
+.byte $01,$3c,$00
+.byte $01,$00,$00
+.byte $00,$41,$80
+.byte $00,$28,$00
+.byte $00,$04,$00
+.byte $00,$00,$00
+
+.byte 0
+
+; Wall
+.alias wall_page    sprite_0_page+3
+
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+.byte $ff,$ff,$ff
+
+.byte 0
+
+; Teleporter
+.alias teleporter_page    sprite_0_page+4
+
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+.byte $cc,$cc,$cc
+
+.byte 0
+
+; Key
+.alias key_page    sprite_0_page+5
+
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$7e,$00
+.byte $00,$e7,$00
+.byte $01,$e7,$80
+.byte $01,$ff,$80
+.byte $01,$ff,$80
+.byte $00,$ff,$00
+.byte $00,$7e,$00
+.byte $00,$18,$00
+.byte $00,$18,$00
+.byte $00,$78,$00
+.byte $00,$78,$00
+.byte $00,$18,$00
+.byte $00,$78,$00
+.byte $00,$78,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+
+.byte 0
+
+; POP
+.alias pop_page    sprite_0_page+6
+
+.byte $00,$08,$00
+.byte $20,$08,$02
+.byte $10,$08,$04
+.byte $08,$08,$08
+.byte $04,$08,$10
+.byte $02,$08,$20
+.byte $00,$00,$00
+.byte $03,$19,$80
+.byte $02,$a5,$40
+.byte $fb,$25,$9f
+.byte $02,$25,$00
+.byte $02,$19,$00
+.byte $00,$00,$40
+.byte $02,$10,$20
+.byte $04,$10,$10
+.byte $08,$10,$08
+.byte $10,$10,$04
+.byte $20,$10,$02
+.byte $40,$10,$00
+.byte $00,$10,$00
+.byte $00,$10,$00
+
+.byte 0
+
+; Guard
+.alias guard_page    sprite_0_page+7
+
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$00,$00
+.byte $00,$3f,$00
+.byte $00,$4c,$80
+.byte $00,$9e,$40
+.byte $01,$3b,$20
+.byte $01,$3b,$20
+.byte $00,$9e,$40
+.byte $00,$4c,$80
+.byte $00,$3f,$00
+.byte $00,$0c,$10
+.byte $00,$1e,$10
+.byte $07,$ff,$f8
+.byte $07,$ff,$f8
+.byte $03,$0c,$30
+.byte $01,$ff,$e0
+.byte $00,$ff,$c0
+.byte $00,$7f,$80
+.byte $00,$00,$00
+.byte $00,$00,$00
+
+.byte 0
+
+;====================================================================
+;**** ***** ***** ***** ***** VARIABLES ***** ***** ***** ***** *****
+;====================================================================
+
+;
+; Game State
+;
+
+.space room_num                 1     ; index into map array of room currently occupied by the bubble
+.space current_room             1     ; cache of map cell representing current room (i.e. "lda map, y" where y = room_num)
+.space num_lives                1
+.space num_keys                 1
+
+.space player_state             1
+
+.alias state_alive              0
+.alias state_popped             1
+
+.space player_timer             1
+.space sentry_timer             1
+
+;
+; Arithmetic
+;
+
+.space temp_low                 1
+.space temp_high                1
+.space sign_extend              1
+
+;
+; Interrupt Handling
+;
+
+.space savecinv                 2
+.space irq_active               1
+.space waiting_collision_clear  1
+
+;
+; Flags
+;
+
+.space room_changed             1
+.space player_died              1
+.space player_won               1
+
+;
+; Temporary Storage in IRQ handler
+;
+
+.space msb_counter              1    ; for calculating sprite's x msb
+.space indirect_jump_vector     2
+
+;
+; Temporary Storage for Setting up Room etc.
+;
+
+.space baddie                   1
+.space room_delta               1
+
+
+;=====================================================================
+;**** ***** ***** ***** ***** _ ACTORS _ ***** ***** ***** ***** *****
+;=====================================================================
+
+; Actor positions, velocities, and accelerations are stored as
+; fixed point values with 13 bits to the left and 3 bits to the right
+; of the decimal point.  These value can thus be thought of as 1/8ths
+; of a pixel (or 1/8 of a pixel per jiffy, or per jiffy^2.)
+;
+; Positions are stored in two bytes in order to accomodate 256 pixel
+; positions, but velocity and acceleration need not ever be so large.
+; Positions are converted to pixel positions simply by shifting right
+; 3 times.
+;
+; For velocity and acceleration, stored in a single byte, this gives
+; us a range of 0 to 32 pixels per jiffy(^2) with a resolution of
+; 0.125 pixels per jiffy(^2).
+;
+; Advancement of the bubble is done by addition of fixed point values
+; (with arithmetic identical as it would be for integers.)
+;
+; This gives us the following screen dimensions:
+;
+; Sprite width = 192 (24.0), sprite height = 168 (21.0)
+;
+; Visible viewing width: x=192 (24.0) to x=2752 (344.0)
+; Center of viewing width: x=1472   (344+24 / 2 = 184.0)
+; Center, for sprite: x=1472-(192/2)= 1376
+;
+; Visible viewing height: y=400 (50.0) to y=2000 (250.0)
+; Center of viewing height: y=1200   (250+50/2=150.0)
+; Center, for sprite: y=1200-(168/2)= 1116
+
+.alias center_x         1472
+.alias center_y         1200
+
+.alias center_x_sprite  1376
+.alias center_y_sprite  1116
+
+.alias initial_x_bubble 2016      ; for re-appearing in rooms that
+.alias initial_y_bubble  849      ; already contain baddies in center
+
+;
+; Actor has moved to adjacent room to north when its y position
+; is smaller than 320 (40.0, which is 50.0 minus half sprite height)
+;
+; Actor has moved to adjacent room to south when its y position
+; is greater than 1920 (240.0, which is 250.0 minus half sprite height)
+;
+; Actor has moved to adjacent room to west when its x position
+; is less than 96 (12.0, which is 24.0 minus half sprite width)
+;
+; Actor has moved to adjacent room to east when its x position
+; is greater than 2656 (332.0, which is 344.0 minus half sprite width)
+;
+
+.alias west_boundary        96
+.alias east_boundary      2656
+.alias north_boundary      320
+.alias south_boundary     1920
+
+;
+; Actors are stored in an interleaved table.  That is, the first byte
+; from every actor is stored in a block, then the second byte from
+; every actor in the next block, etc.  This makes indexing into the
+; table easier than if each actor was stored contiguously -- that would
+; require shifting to find an offset.
+;
+; The table itself is stored in zero-page memory, for performance.
+;
+
+;--------------- table proper begins ------------------
+
+.org $0008
+.alias actor_table_base     $0008
+.alias actor_table_size        80
+
+.space actor_0_xpos_low         8
+.space actor_0_xpos_high        8
+
+.space actor_0_ypos_low         8
+.space actor_0_ypos_high        8
+
+.space actor_0_xvel             8
+.space actor_0_yvel             8
+
+.space actor_0_xacc             8
+.space actor_0_yacc             8
+
+.space actor_0_logic_low        8
+.space actor_0_logic_high       8
