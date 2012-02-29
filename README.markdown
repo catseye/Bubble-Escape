@@ -156,13 +156,22 @@ the original was written.
 Hints
 -----
 
-- The maze is 20 rooms wide by 10 rooms tall, 200 rooms in total.
-- The maze is static and hardcoded, not randomly generated.
-- You start in the top left corner.
-- The exit is in the bottom right corner.
-- There are teleporters in the bottom left and top right corners; each one
+* The maze is 20 rooms wide by 10 rooms tall, 200 rooms in total.
+* The maze is static and hardcoded, not randomly generated.
+* You start in the top left corner.
+* The exit is in the bottom right corner.
+* There are teleporters in the bottom left and top right corners; each one
   will teleport you to the other corner.
 
+TODO
+----
+
+* Describe Bubble Escape 8K in this README, and what I'd like to see in
+  it eventually: title screen with music, better game over and game won
+  screens, maybe random maze generation, maybe nastier nasties.
+* Otherwise reformat this README to reflect the different versions.
+* Initialize SID in Bubble Escape 8K so that we have things in rooms.
+* Put original version, and some kind of README, on the d64 image.
 
 Have fun!
 
