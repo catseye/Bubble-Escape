@@ -74,11 +74,12 @@ comparative purposes, or if you prefer, for larfs.
 The Remake - 2009
 -----------------
 
-The remake is written entirely in 6502 assembly language, using the P65
-portable 6502 assembler.  The memories of my disappointment at the poor
-performance of the original game have hung heavily on my mind (well,
-maybe not *that* heavily,) hence I endeavoured to make the remake as
-fast and as smooth as I could.
+The remake was written entirely in 6502 assembly language, using the P65
+portable 6502 assembler.  (The P65 assembler has since been superceded by
+the Ophis assembler, which is now used in the build process.)  The memories
+of my disappointment at the poor performance of the original game had hung
+heavily on my mind (well, maybe not *that* heavily,) hence I endeavoured to
+make the remake as fast and as smooth as I could.
 
 This was largely accomplished by the use of a raster interrupt which is
 triggered at the very bottom of the screen.  This interrupt runs a routine
@@ -140,7 +141,7 @@ here you have it.
 License
 -------
 
-The BASIC source code, BASIC program, P65 source code, and machine language
+The BASIC source code, BASIC program, Ophis source code, and machine language
 program are all freely redistributable.  This means that you can download,
 play with, and modify these files for your own entertainment as much as you
 like.  You may also provide copies of these unaltered files to others (as
