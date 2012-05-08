@@ -185,6 +185,14 @@ init:
         sta waiting_collision_clear
         tay
 
+        ; completely reset the SID chip here...
+
+reset_sid_loop:
+        sta sid_base, y
+        iny
+        cpy #$1D
+        bne reset_sid_loop
+
         lda #$8f   ; volume = 15, bit 7 = voice 3 silenced
         sta sid_volume
 
@@ -211,6 +219,8 @@ init:
 
         lda #3
         sta vic_sprite_0_color
+
+        ldy #0
 
 copy_sprites_loop:
         lda sprite_source, y
@@ -309,6 +319,9 @@ set_up_map:
 set_up_map_loop:
         dey
 
+        lda map_in_rom, y
+        sta writable_map, y
+
         jsr check_map_for_existing
         beq next_map_loop
 
@@ -316,10 +329,10 @@ set_up_map_loop:
         ora #c_walls
         sta baddie
 
-        lda map, y
+        lda writable_map, y
         and #wall_mask
         ora baddie
-        sta map, y
+        sta writable_map, y
 
 next_map_loop:
         cpy #0
@@ -334,10 +347,10 @@ place_keys_loop:
         jsr check_map_for_existing
         beq place_keys_loop
 
-        lda map, y
+        lda writable_map, y
         and #wall_mask
         ora #c_key
-        sta map, y
+        sta writable_map, y
 
         dex
         bne place_keys_loop
@@ -372,7 +385,7 @@ initialize_room:
         ; cache current map cell in current_room
 
         ldy room_num
-        lda map, y
+        lda writable_map, y
         sta current_room
 
         jsr clear_screen
@@ -916,7 +929,7 @@ collide_with_key:
         ldy room_num
         lda current_room
         and #wall_mask
-        sta map, y
+        sta writable_map, y
 
         ldy sentry_initial
         dey
@@ -1343,7 +1356,7 @@ sentry_done:
 ;===================================================================
 
 check_map_for_existing:
-        lda map, y
+        lda writable_map, y
         and #$0f
         cmp #c_start
         beq map_has_existing
@@ -1571,7 +1584,7 @@ done_moving_sprites:
 
 .alias map_width 20
 
-map:
+map_in_rom:
 .byte %11000001, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10010000, %10100000, %11010000, %10010000, %10010000, %10100000, %11010000, %10100000, %11010000, %10000000, %10100010
 .byte %01100000, %11010000, %10000000, %10000000, %10010000, %10100000, %11000000, %10010000, %10000000, %10110000, %01010000, %10100000, %11000000, %10010000, %00110000, %11000000, %00010000, %10000000, %00110000, %01110000
 .byte %01000000, %10010000, %00110000, %01100000, %11000000, %00110000, %01100000, %11100000, %01110000, %11000000, %10110000, %01100000, %01010000, %10000000, %10100000, %01100000, %11000000, %00100000, %11000000, %10100000
@@ -1943,3 +1956,10 @@ sprite_source:
 
 .space baddie                   1
 .space room_delta               1
+
+;
+; Writable copy of the map.
+;
+
+.org $c000
+.space writable_map             200
