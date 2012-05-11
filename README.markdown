@@ -2,7 +2,7 @@ Bubble Escape
 =============
 
 (c)2009 Cat's Eye Technologies.  All rights reserved.  
-Freely redistributable unmodified for non-commercial purposes.
+Covered under a BSD-style license; see the file LICENSE for the full text.
 
 What is it?
 -----------
@@ -107,7 +107,7 @@ But some changes are significant:
 * The title screen, game over screen, and game won screens are not nearly
   as nice to look at.
 
-The assembly code for this version wass pretty painful because it was largely
+The assembly code for this version was pretty painful because it was largely
 a direct translation of the BASIC to assembly language.  I can think of many
 ways for it to be much cleaner (more jump tables come to mind.)
 
@@ -129,7 +129,7 @@ the game itself, getting rid of the title/game over screens, sound effects,
 and one sprite image, bringing it down to ~2175 bytes.
 
 I then looked for a cruncher that would take me the rest of the way.  After
-a few false starts, I eventually found Cruncher AB+ which exceeded my
+a few false starts, I eventually found "Cruncher AB+" which exceeded my
 expectations.  In fact, I was able to restore the sound effects and sprite,
 and add one more feature to make the game harder (the more keys you have,
 the shorter the delay before a sentry starts moving after you enter its
@@ -138,16 +138,57 @@ room.)
 The end result was 2043 bytes, so I christened it "Bubble Escape 2K" and
 here you have it.
 
+The Mini Game Compo Winner
+--------------------------
+
+Much to my surprise, submitting Bubble Escape 2K to the 2009 Mini Game
+Competition was a good move -- it won first place in the 2K category!
+
+Unfortunately, the website hosting the rules and entries went down soon
+afterwards, and I did not think fast enough about saving a copy of the
+results page for posterity, so I have no hard evidence of this.  I'm sure
+if you could find and ask the judges, they'd back up my story, though :)
+
+The 8K Cartridge Version -- 2011 & 2012
+---------------------------------------
+
+After writing the remake, I had a great, and I think perfectly reasonable,
+desire to play it on a Commodore 64.  Through a series of moves, I lost
+my original C64 in 2009; acquiring another one was not difficult, but the
+burning question was, what was the best way to get that 2K of code onto
+the new machine?
+
+There are several ways, ranging in ease and expense, to transfer files from
+modern PC's to C64's and back.  I decided that the most interesting, though,
+was to get an EPROM burner, a bit of Flash memory in a DIP, and an old
+Commodore 64 cartridge that no one really wanted; and to modify the game to
+run from a cartridge ROM, burn that ROM image onto the Flash chip, take apart
+the cartridge, remove the existing ROM, wire the Flash chip up to the right
+address and data lines on the cartridge's PCB, stick it into the cartridge
+port and turn on the C64.
+
+Well, some of those things transpired, and some didn't -- I did sacrifice a
+"Frog Master" cartridge for the project, but I never did get to the point of
+removing the ROM from its PCB.  (There's an outside chance I will someday,
+but I wouldn't bank on it.  Ha!  Ha!  "Bank", get it?)
+
+I did, however, modify the game to build as an 8K ROM image in 2011, and,
+after fixing some bugs in 2012, it does boot as a fully playable ROM image
+in VICE.
+
+Being an 8K ROM image based on a ~2K game, there is a lot of room there
+that is currently just zero bytes, but which could be used for all kinds of
+enhancements: maybe a title screen with music, maybe better game over and
+game won sequences, maybe random maze generation, maybe nastier nasties.
+Maybe someday.
+
 License
 -------
 
-The BASIC source code, BASIC program, Ophis source code, and machine language
-program are all freely redistributable.  This means that you can download,
-play with, and modify these files for your own entertainment as much as you
-like.  You may also provide copies of these unaltered files to others (as
-a courtesy, please include all the files together, if possible.)  But you must
-obtain permission from Cat's Eye Technologies in order to distribute altered
-versions of these files or works derived from these files.
+All three versions of Bubble Escape are now covered under a BSD-style
+license, which means you can deal quite freely with the source code and
+compiled binaries as long as you keep the license text intact.  See the
+file LICENSE for complete information.
 
 The full title of the game is "Cat's Eye Technologies' Bubble Escape", to
 distinguish it from the handful of other games of the same name (many of
@@ -163,16 +204,6 @@ Hints
 * The exit is in the bottom right corner.
 * There are teleporters in the bottom left and top right corners; each one
   will teleport you to the other corner.
-
-TODO
-----
-
-* Describe Bubble Escape 8K in this README, and what I'd like to see in
-  it eventually: title screen with music, better game over and game won
-  screens, maybe random maze generation, maybe nastier nasties.
-* Otherwise reformat this README to reflect the different versions.
-* Initialize SID in Bubble Escape 8K so that we have things in rooms.
-* Put original version, and some kind of README, on the d64 image.
 
 Have fun!
 
