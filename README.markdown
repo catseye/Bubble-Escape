@@ -1,7 +1,7 @@
 Bubble Escape
 =============
 
-(c)2009 Cat's Eye Technologies.  All rights reserved.  
+(c)2009-2012 Cat's Eye Technologies.  All rights reserved.  
 Covered under a BSD-style license; see the file LICENSE for the full text.
 
 What is it?
@@ -153,10 +153,10 @@ The 8K Cartridge Version -- 2011 & 2012
 ---------------------------------------
 
 After writing the remake, I had a great, and I think perfectly reasonable,
-desire to play it on a Commodore 64.  Through a series of moves, I lost
-my original C64 in 2009; acquiring another one was not difficult, but the
-burning question was, what was the best way to get that 2K of code onto
-the new machine?
+desire to play it on a real, physical Commodore 64.  Through a series of
+moves, I lost my original C64 in 2009; acquiring another one was not too
+difficult, but the burning question was, what was the best way to get that
+2K of code onto the new machine?
 
 There are several ways, ranging in ease and expense, to transfer files from
 modern PC's to C64's and back.  I decided that the most interesting, though,
@@ -192,8 +192,8 @@ file LICENSE for complete information.
 
 The full title of the game is "Cat's Eye Technologies' Bubble Escape", to
 distinguish it from the handful of other games of the same name (many of
-which are online Macromedia Flash-based dealies) which have appeared since
-the original was written.
+which are online Flash-based dealies) which have appeared since the
+original was written.
 
 Hints
 -----
