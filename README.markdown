@@ -76,10 +76,11 @@ The Remake - 2009
 
 The remake was written entirely in 6502 assembly language, using the P65
 portable 6502 assembler.  (The P65 assembler has since been superceded by
-the Ophis assembler, which is now used in the build process.)  The memories
-of my disappointment at the poor performance of the original game had hung
-heavily on my mind (well, maybe not *that* heavily,) hence I endeavoured to
-make the remake as fast and as smooth as I could.
+the Ophis assembler, which is now used in the build process -- in fact,
+Ophis version 2.0 is assumed.)  The memories of my disappointment at the
+poor performance of the original game had hung heavily on my mind (well,
+maybe not *that* heavily,) hence I endeavoured to make the remake as fast
+and as smooth as I could.
 
 This was largely accomplished by the use of a raster interrupt which is
 triggered at the very bottom of the screen.  This interrupt runs a routine

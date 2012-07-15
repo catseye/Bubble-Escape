@@ -1,0 +1,5 @@
+syntax: glob
+
+bin/be2k.prg
+bin/*.bin
+
