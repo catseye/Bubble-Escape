@@ -4,6 +4,8 @@ Bubble Escape
 (c)2009-2012 Cat's Eye Technologies.  All rights reserved.  
 Covered under a BSD-style license; see the file LICENSE for the full text.
 
+![Screenshot of Bubble Escape 2K](https://github.com/catseye/Bubble-Escape/blob/master/images/bubble escape 2k.png)
+
 What is it?
 -----------
 
