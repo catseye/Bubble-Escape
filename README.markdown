@@ -1,6 +1,13 @@
 Bubble Escape
 =============
 
+_Try it online_ [@ catseye.tc](https://catseye.tc/installation/Bubble%20Escape%202K)
+| _See also:_ [Dungeons of Ekileugor](https://github.com/catseye/Dungeons-of-Ekileugor#readme)
+∘ [SixtyPical](https://github.com/catseye/SixtyPical#readme)
+∘ [yucca](https://github.com/catseye/yucca#readme)
+
+- - - -
+
 (c)2009-2016 Cat's Eye Technologies.  All rights reserved.  
 Covered under a BSD-style license; see the file LICENSE for the full text.
 
