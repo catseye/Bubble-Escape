@@ -8,7 +8,7 @@ _Try it online_ [@ catseye.tc](https://catseye.tc/installation/Bubble%20Escape)
 
 - - - -
 
-(c)2009-2016 Cat's Eye Technologies.  All rights reserved.  
+(c)2009-2021 Cat's Eye Technologies.  All rights reserved.  
 Covered under a BSD-style license; see the file LICENSE for the full text.
 
 ![Screenshot of Bubble Escape 2K](images/bubble%20escape%202k.png?raw=true)
