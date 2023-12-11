@@ -2,9 +2,9 @@ Bubble Escape
 =============
 
 _Try it online_ [@ catseye.tc](https://catseye.tc/installation/Bubble%20Escape)
-| _See also:_ [Dungeons of Ekileugor](https://github.com/catseye/Dungeons-of-Ekileugor#readme)
-∘ [SixtyPical](https://github.com/catseye/SixtyPical#readme)
-∘ [yucca](https://github.com/catseye/yucca#readme)
+| _See also:_ [Dungeons of Ekileugor](https://codeberg.org/catseye/Dungeons-of-Ekileugor#dungeons-of-ekileugor)
+∘ [SixtyPical](https://codeberg.org/catseye/SixtyPical#sixtypical)
+∘ [yucca](https://codeberg.org/catseye/yucca#yucca)
 
 - - - -
 
